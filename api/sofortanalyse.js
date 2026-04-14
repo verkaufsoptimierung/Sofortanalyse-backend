@@ -12,7 +12,7 @@ module.exports = async function handler(req, res) {
   // GET-Test
   if (req.method === 'GET') {
     var keyCheck = process.env.GEMINI_API_KEY ? 'gesetzt (' + process.env.GEMINI_API_KEY.length + ' Zeichen)' : 'FEHLT!';
-    return res.status(200).json({ status: 'Funktion läuft', version: '3.0-v1-endpoint', gemini_key: keyCheck });
+    return res.status(200).json({ status: 'Funktion läuft', version: '4.0-gemini-pro', gemini_key: keyCheck });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nur POST erlaubt' });
@@ -73,7 +73,7 @@ module.exports = async function handler(req, res) {
 
   // Schritt 2: Gemini analysieren lassen
   try {
-    var geminiUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=' + apiKey;
+    var geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey;
 
     var response = await fetch(geminiUrl, {
       method: 'POST',
