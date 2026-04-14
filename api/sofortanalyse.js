@@ -71,9 +71,9 @@ module.exports = async function handler(req, res) {
       });
       var modelsData = JSON.parse(modelsResult.text);
       var modelNames = (modelsData.models || []).map(function(m) { return m.name; });
-      return res.status(200).json({ status: 'Funktion läuft', version: '6.0-list-models', gemini_key: keyCheck, verfuegbare_modelle: modelNames });
+      return res.status(200).json({ status: 'Funktion läuft', version: '7.0-gemini-2.5-flash', gemini_key: keyCheck, verfuegbare_modelle: modelNames });
     } catch(e) {
-      return res.status(200).json({ status: 'Funktion läuft', version: '6.0-list-models', gemini_key: keyCheck, modell_fehler: e.message });
+      return res.status(200).json({ status: 'Funktion läuft', version: '7.0-gemini-2.5-flash', gemini_key: keyCheck, modell_fehler: e.message });
     }
   }
 
@@ -111,7 +111,7 @@ module.exports = async function handler(req, res) {
   try {
     var result = await httpsPost(
       'generativelanguage.googleapis.com',
-      '/v1beta/models/gemini-pro:generateContent?key=' + apiKey,
+      '/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,
       {
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
