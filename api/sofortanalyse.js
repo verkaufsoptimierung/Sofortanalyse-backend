@@ -20,7 +20,7 @@ module.exports = async function handler(req, res) {
   var systemPrompt = 'Du bist Verkaufspsychologe und Conversion-Optimierer nach der Farkas-Methode, spezialisiert auf verkaufsstarke Websites.\n\nDeine Aufgabe: Analysiere die angegebene URL (nur die Startseite, keine Unterseiten) und finde verkaufspsychologische Optimierungspotentiale.\n\nRegeln:\n- Liefere genau 6-8 kurze, praegnante Stichpunkte\n- Jeder Stichpunkt maximal 1-2 Saetze\n- Fokus auf verkaufspsychologische Hebel: Wertversprechen, Social Proof, Dringlichkeit, CTA-Optimierung, Einwandbehandlung, Vertrauenssignale, Storytelling, User Journey\n- Sei konkret und beziehe Dich auf das, was Du auf der Seite siehst\n- Antworte NUR mit einem JSON-Array von Strings, keine weitere Erklaerung\n- Sprache: Deutsch\n\nBeispiel-Format:\n["Stichpunkt 1","Stichpunkt 2","Stichpunkt 3"]';
 
   try {
-    var geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
+    var geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey;
 
     var response = await fetch(geminiUrl, {
       method: 'POST',
