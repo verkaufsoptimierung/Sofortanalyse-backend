@@ -56,8 +56,25 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method === 'GET') {
-    var keyCheck = process.env.GEMINI_API_KEY ? 'gesetzt (' + process.env.GEMINI_API_KEY.length + ' Zeichen)' : 'FEHLT!';
-    return res.status(200).json({ status: 'Funktion läuft', version: '5.0-https-modul', gemini_key: keyCheck });
+    var apiKey2 = process.env.GEMINI_API_KEY;
+    var keyCheck = apiKey2 ? 'gesetzt (' + apiKey2.length + ' Zeichen)' : 'FEHLT!';
+    // Verfügbare Modelle abrufen
+    try {
+      var modelsResult = await new Promise(function(resolve, reject) {
+        var req2 = https.get('https://generativelanguage.googleapis.com/v1beta/models?key=' + apiKey2, function(r) {
+          var chunks = [];
+          r.on('data', function(c) { chunks.push(c); });
+          r.on('end', function() { resolve({ status: r.statusCode, text: Buffer.concat(chunks).toString() }); });
+        });
+        req2.on('error', reject);
+        req2.setTimeout(5000, function() { req2.destroy(); reject(new Error('Timeout')); });
+      });
+      var modelsData = JSON.parse(modelsResult.text);
+      var modelNames = (modelsData.models || []).map(function(m) { return m.name; });
+      return res.status(200).json({ status: 'Funktion läuft', version: '6.0-list-models', gemini_key: keyCheck, verfuegbare_modelle: modelNames });
+    } catch(e) {
+      return res.status(200).json({ status: 'Funktion läuft', version: '6.0-list-models', gemini_key: keyCheck, modell_fehler: e.message });
+    }
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nur POST erlaubt' });
