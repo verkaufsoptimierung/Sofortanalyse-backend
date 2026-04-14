@@ -71,9 +71,9 @@ module.exports = async function handler(req, res) {
       });
       var modelsData = JSON.parse(modelsResult.text);
       var modelNames = (modelsData.models || []).map(function(m) { return m.name; });
-      return res.status(200).json({ status: 'Funktion läuft', version: '7.0-gemini-2.5-flash', gemini_key: keyCheck, verfuegbare_modelle: modelNames });
+      return res.status(200).json({ status: 'Funktion läuft', version: '8.0-fix-parsing', gemini_key: keyCheck, verfuegbare_modelle: modelNames });
     } catch(e) {
-      return res.status(200).json({ status: 'Funktion läuft', version: '7.0-gemini-2.5-flash', gemini_key: keyCheck, modell_fehler: e.message });
+      return res.status(200).json({ status: 'Funktion läuft', version: '8.0-fix-parsing', gemini_key: keyCheck, modell_fehler: e.message });
     }
   }
 
@@ -131,15 +131,26 @@ module.exports = async function handler(req, res) {
     var content = data.candidates[0].content.parts[0].text.trim();
     var results;
     try {
-      var jsonMatch = content.match(/\[[\s\S]*\]/);
-      results = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(content);
+      // Markdown-Code-Block entfernen falls vorhanden
+      var cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+      var jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        results = JSON.parse(jsonMatch[0]);
+      } else {
+        results = JSON.parse(cleaned);
+      }
     } catch (e) {
+      // Zeilenweises Fallback-Parsing
       results = content.split('\n')
-        .map(function(l) { return l.replace(/^[-•*"\d.]\s*/, '').replace(/[",]$/, '').trim(); })
-        .filter(function(l) { return l.length > 10; });
+        .map(function(l) { return l.replace(/^[\s\-•*"\d.]+/, '').replace(/[",]+$/, '').trim(); })
+        .filter(function(l) { return l.length > 15; });
     }
+    // Sicherstellen dass es ein Array ist
+    if (!Array.isArray(results)) results = [String(results)];
+    // Leere Einträge entfernen
+    results = results.filter(function(r) { return r && String(r).trim().length > 5; });
 
-    return res.status(200).json({ results: results, debug_fetched: seiteninhalt.length });
+    return res.status(200).json({ results: results, debug_fetched: seiteninhalt.length, debug_raw: content.substring(0, 300) });
 
   } catch (err) {
     console.error('Fehler:', err.message);
