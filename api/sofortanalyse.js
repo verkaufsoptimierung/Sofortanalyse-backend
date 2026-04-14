@@ -1,4 +1,5 @@
 // Vercel Serverless Function – Sofortanalyse mit Google Gemini
+// Website wird serverseitig abgerufen, dann von Gemini analysiert
 
 module.exports = async function handler(req, res) {
   // CORS
@@ -8,7 +9,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // GET-Test: zeigt ob die Funktion läuft und ob der API-Key gesetzt ist
+  // GET-Test
   if (req.method === 'GET') {
     var keyCheck = process.env.GEMINI_API_KEY ? 'gesetzt (' + process.env.GEMINI_API_KEY.length + ' Zeichen)' : 'FEHLT!';
     return res.status(200).json({ status: 'Funktion läuft', gemini_key: keyCheck });
@@ -24,8 +25,53 @@ module.exports = async function handler(req, res) {
   var apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY nicht konfiguriert in Vercel!' });
 
-  var systemPrompt = 'Du bist Verkaufspsychologe und Conversion-Optimierer nach der Farkas-Methode, spezialisiert auf verkaufsstarke Websites.\n\nDeine Aufgabe: Analysiere die angegebene URL (nur die Startseite, keine Unterseiten) und finde verkaufspsychologische Optimierungspotentiale.\n\nRegeln:\n- Liefere genau 6-8 kurze, praegnante Stichpunkte\n- Jeder Stichpunkt maximal 1-2 Saetze\n- Fokus auf verkaufspsychologische Hebel: Wertversprechen, Social Proof, Dringlichkeit, CTA-Optimierung, Einwandbehandlung, Vertrauenssignale, Storytelling, User Journey\n- Sei konkret und beziehe Dich auf das, was Du auf der Seite siehst\n- Antworte NUR mit einem JSON-Array von Strings, keine weitere Erklaerung\n- Sprache: Deutsch\n\nBeispiel-Format:\n["Stichpunkt 1","Stichpunkt 2","Stichpunkt 3"]';
+  // Sicherstellen dass URL mit https:// beginnt
+  var fetchUrl = url;
+  if (!fetchUrl.startsWith('http://') && !fetchUrl.startsWith('https://')) {
+    fetchUrl = 'https://' + fetchUrl;
+  }
 
+  // Schritt 1: Website abrufen
+  var seiteninhalt = '';
+  try {
+    var siteResponse = await fetch(fetchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; ConversionAnalyser/1.0)',
+        'Accept': 'text/html'
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8000)
+    });
+
+    if (siteResponse.ok) {
+      var html = await siteResponse.text();
+
+      // HTML bereinigen: Scripts, Styles, SVGs entfernen
+      html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+      html = html.replace(/<style[\s\S]*?<\/style>/gi, '');
+      html = html.replace(/<svg[\s\S]*?<\/svg>/gi, '');
+      html = html.replace(/<!--[\s\S]*?-->/g, '');
+
+      // Tags entfernen, nur Text behalten
+      var text = html.replace(/<[^>]+>/g, ' ');
+      text = text.replace(/\s+/g, ' ').trim();
+
+      // Auf 4000 Zeichen begrenzen (reicht für die Startseite)
+      seiteninhalt = text.substring(0, 4000);
+    }
+  } catch (fetchErr) {
+    console.log('Website konnte nicht abgerufen werden:', fetchErr.message);
+    // Weiter mit URL-only-Analyse wenn Website nicht erreichbar
+  }
+
+  var prompt;
+  if (seiteninhalt.length > 100) {
+    prompt = 'Du bist Verkaufspsychologe und Conversion-Optimierer nach der Farkas-Methode.\n\nAnalysiere den folgenden Seiteninhalt der Website ' + url + ' und finde konkrete verkaufspsychologische Optimierungspotentiale.\n\nSeiteninhalt:\n' + seiteninhalt + '\n\nRegeln:\n- Liefere genau 6-8 kurze, prägnante Stichpunkte\n- Beziehe Dich konkret auf den Inhalt der Seite\n- Fokus auf: Wertversprechen, Social Proof, Dringlichkeit, CTA, Einwandbehandlung, Vertrauen, Storytelling\n- Antworte NUR mit einem JSON-Array von Strings\n- Sprache: Deutsch\n\nFormat: ["Stichpunkt 1","Stichpunkt 2",...]';
+  } else {
+    prompt = 'Du bist Verkaufspsychologe und Conversion-Optimierer nach der Farkas-Methode.\n\nAnalysiere die Website ' + url + ' und nenne typische Optimierungspotentiale für diese Art von Website.\n\nRegeln:\n- Liefere genau 6-8 kurze, prägnante Stichpunkte\n- Fokus auf: Wertversprechen, Social Proof, Dringlichkeit, CTA, Einwandbehandlung, Vertrauen, Storytelling\n- Antworte NUR mit einem JSON-Array von Strings\n- Sprache: Deutsch\n\nFormat: ["Stichpunkt 1","Stichpunkt 2",...]';
+  }
+
+  // Schritt 2: Gemini analysieren lassen
   try {
     var geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey;
 
@@ -33,26 +79,15 @@ module.exports = async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: systemPrompt + '\n\nAnalysiere diese Website: ' + url }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1000
-        }
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
       })
     });
 
     if (!response.ok) {
       var errText = await response.text();
       console.error('Gemini API Fehler:', response.status, errText);
-      return res.status(500).json({
-        error: 'Gemini API Fehler: ' + response.status,
-        detail: errText
-      });
+      return res.status(500).json({ error: 'Gemini API Fehler: ' + response.status, detail: errText });
     }
 
     var data = await response.json();
@@ -63,26 +98,21 @@ module.exports = async function handler(req, res) {
 
     var content = data.candidates[0].content.parts[0].text.trim();
 
-    // JSON aus der Antwort extrahieren
     var results;
     try {
       var jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        results = JSON.parse(jsonMatch[0]);
-      } else {
-        results = JSON.parse(content);
-      }
+      results = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(content);
     } catch (e) {
       results = content
         .split('\n')
-        .map(function(line) { return line.replace(/^[-•*"\d.]\s*/, '').replace(/[",]$/, '').trim(); })
-        .filter(function(line) { return line.length > 10; });
+        .map(function(l) { return l.replace(/^[-•*"\d.]\s*/, '').replace(/[",]$/, '').trim(); })
+        .filter(function(l) { return l.length > 10; });
     }
 
     return res.status(200).json({ results: results });
 
   } catch (err) {
-    console.error('Fehler:', err.message, err.stack);
+    console.error('Fehler:', err.message);
     return res.status(500).json({ error: 'Analyse fehlgeschlagen: ' + err.message });
   }
 };
