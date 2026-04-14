@@ -12,7 +12,7 @@ module.exports = async function handler(req, res) {
   // GET-Test
   if (req.method === 'GET') {
     var keyCheck = process.env.GEMINI_API_KEY ? 'gesetzt (' + process.env.GEMINI_API_KEY.length + ' Zeichen)' : 'FEHLT!';
-    return res.status(200).json({ status: 'Funktion läuft', gemini_key: keyCheck });
+    return res.status(200).json({ status: 'Funktion läuft', version: '2.0-website-fetch', gemini_key: keyCheck });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nur POST erlaubt' });
