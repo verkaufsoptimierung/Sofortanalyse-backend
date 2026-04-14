@@ -7,6 +7,13 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // GET-Test: zeigt ob die Funktion läuft und ob der API-Key gesetzt ist
+  if (req.method === 'GET') {
+    var keyCheck = process.env.GEMINI_API_KEY ? 'gesetzt (' + process.env.GEMINI_API_KEY.length + ' Zeichen)' : 'FEHLT!';
+    return res.status(200).json({ status: 'Funktion läuft', gemini_key: keyCheck });
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nur POST erlaubt' });
 
   var body = req.body || {};
@@ -15,7 +22,7 @@ module.exports = async function handler(req, res) {
   if (!url) return res.status(400).json({ error: 'URL fehlt' });
 
   var apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY nicht konfiguriert' });
+  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY nicht konfiguriert in Vercel!' });
 
   var systemPrompt = 'Du bist Verkaufspsychologe und Conversion-Optimierer nach der Farkas-Methode, spezialisiert auf verkaufsstarke Websites.\n\nDeine Aufgabe: Analysiere die angegebene URL (nur die Startseite, keine Unterseiten) und finde verkaufspsychologische Optimierungspotentiale.\n\nRegeln:\n- Liefere genau 6-8 kurze, praegnante Stichpunkte\n- Jeder Stichpunkt maximal 1-2 Saetze\n- Fokus auf verkaufspsychologische Hebel: Wertversprechen, Social Proof, Dringlichkeit, CTA-Optimierung, Einwandbehandlung, Vertrauenssignale, Storytelling, User Journey\n- Sei konkret und beziehe Dich auf das, was Du auf der Seite siehst\n- Antworte NUR mit einem JSON-Array von Strings, keine weitere Erklaerung\n- Sprache: Deutsch\n\nBeispiel-Format:\n["Stichpunkt 1","Stichpunkt 2","Stichpunkt 3"]';
 
@@ -42,16 +49,23 @@ module.exports = async function handler(req, res) {
     if (!response.ok) {
       var errText = await response.text();
       console.error('Gemini API Fehler:', response.status, errText);
-      return res.status(500).json({ error: 'Gemini API Fehler: ' + response.status });
+      return res.status(500).json({
+        error: 'Gemini API Fehler: ' + response.status,
+        detail: errText
+      });
     }
 
     var data = await response.json();
+
+    if (!data.candidates || !data.candidates[0]) {
+      return res.status(500).json({ error: 'Keine Antwort von Gemini', raw: JSON.stringify(data) });
+    }
+
     var content = data.candidates[0].content.parts[0].text.trim();
 
     // JSON aus der Antwort extrahieren
     var results;
     try {
-      // Manchmal kommt der JSON in einem Code-Block
       var jsonMatch = content.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         results = JSON.parse(jsonMatch[0]);
@@ -59,7 +73,6 @@ module.exports = async function handler(req, res) {
         results = JSON.parse(content);
       }
     } catch (e) {
-      // Fallback: Zeilen als Array
       results = content
         .split('\n')
         .map(function(line) { return line.replace(/^[-•*"\d.]\s*/, '').replace(/[",]$/, '').trim(); })
@@ -69,7 +82,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ results: results });
 
   } catch (err) {
-    console.error('Fehler:', err.message);
+    console.error('Fehler:', err.message, err.stack);
     return res.status(500).json({ error: 'Analyse fehlgeschlagen: ' + err.message });
   }
 };
