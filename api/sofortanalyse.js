@@ -71,9 +71,9 @@ module.exports = async function handler(req, res) {
       });
       var modelsData = JSON.parse(modelsResult.text);
       var modelNames = (modelsData.models || []).map(function(m) { return m.name; });
-      return res.status(200).json({ status: 'Funktion läuft', version: '8.0-fix-parsing', gemini_key: keyCheck, verfuegbare_modelle: modelNames });
+      return res.status(200).json({ status: 'Funktion läuft', version: '9.0-token-fix', gemini_key: keyCheck, verfuegbare_modelle: modelNames });
     } catch(e) {
-      return res.status(200).json({ status: 'Funktion läuft', version: '8.0-fix-parsing', gemini_key: keyCheck, modell_fehler: e.message });
+      return res.status(200).json({ status: 'Funktion läuft', version: '9.0-token-fix', gemini_key: keyCheck, modell_fehler: e.message });
     }
   }
 
@@ -104,8 +104,8 @@ module.exports = async function handler(req, res) {
   }
 
   var prompt = seiteninhalt.length > 100
-    ? 'Du bist Verkaufspsychologe und Conversion-Optimierer nach der Farkas-Methode.\n\nAnalysiere den folgenden Seiteninhalt der Website ' + url + ' und finde konkrete verkaufspsychologische Optimierungspotentiale.\n\nSeiteninhalt:\n' + seiteninhalt + '\n\nRegeln:\n- Liefere genau 6-8 kurze, prägnante Stichpunkte\n- Beziehe Dich konkret auf den Inhalt der Seite\n- Fokus auf: Wertversprechen, Social Proof, Dringlichkeit, CTA, Einwandbehandlung, Vertrauen, Storytelling\n- Antworte NUR mit einem JSON-Array von Strings\n- Sprache: Deutsch\n\nFormat: ["Stichpunkt 1","Stichpunkt 2",...]'
-    : 'Du bist Verkaufspsychologe und Conversion-Optimierer nach der Farkas-Methode.\n\nAnalysiere die Website ' + url + ' und nenne typische Optimierungspotentiale für diese Art von Website.\n\nRegeln:\n- Liefere genau 6-8 kurze, prägnante Stichpunkte\n- Fokus auf: Wertversprechen, Social Proof, Dringlichkeit, CTA, Einwandbehandlung, Vertrauen, Storytelling\n- Antworte NUR mit einem JSON-Array von Strings\n- Sprache: Deutsch\n\nFormat: ["Stichpunkt 1","Stichpunkt 2",...]';
+    ? 'Du bist Verkaufspsychologe nach der Farkas-Methode. Analysiere diesen Seiteninhalt von ' + url + ' und liefere 7 konkrete Optimierungspunkte.\n\nSeiteninhalt:\n' + seiteninhalt + '\n\nWichtig: Antworte NUR mit einem JSON-Array. Jeder Punkt max. 15 Wörter. Deutsch.\n\n["Punkt 1","Punkt 2","Punkt 3","Punkt 4","Punkt 5","Punkt 6","Punkt 7"]'
+    : 'Du bist Verkaufspsychologe nach der Farkas-Methode. Analysiere ' + url + ' und liefere 7 Optimierungspunkte.\n\nWichtig: Antworte NUR mit einem JSON-Array. Jeder Punkt max. 15 Wörter. Deutsch.\n\n["Punkt 1","Punkt 2","Punkt 3","Punkt 4","Punkt 5","Punkt 6","Punkt 7"]';
 
   // Schritt 2: Gemini aufrufen
   try {
@@ -114,7 +114,7 @@ module.exports = async function handler(req, res) {
       '/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,
       {
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
+        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
       }
     );
 
