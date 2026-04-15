@@ -55,7 +55,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
     var keyCheck = process.env.GROQ_API_KEY ? 'gesetzt (' + process.env.GROQ_API_KEY.length + ' Zeichen)' : 'FEHLT!';
     var resendCheck = process.env.RESEND_API_KEY ? 'gesetzt (' + process.env.RESEND_API_KEY.length + ' Zeichen)' : 'FEHLT!';
-    return res.status(200).json({ status: 'Funktion läuft', version: '15.0-check-resend', groq_key: keyCheck, resend_key: resendCheck });
+    return res.status(200).json({ status: 'Funktion läuft', version: '16.0-email-debug', groq_key: keyCheck, resend_key: resendCheck });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nur POST erlaubt' });
@@ -124,6 +124,7 @@ module.exports = async function handler(req, res) {
 
     // E-Mail-Benachrichtigung via Resend
     var resendKey = process.env.RESEND_API_KEY;
+    var emailStatus = 'nicht versucht';
     if (resendKey) {
       try {
         var emailHtml = '<h2>Neuer Lead – Sofortanalyse</h2>' +
@@ -134,7 +135,7 @@ module.exports = async function handler(req, res) {
           results.map(function(r) { return '<li>' + r + '</li>'; }).join('') +
           '</ul>';
 
-        await httpsPost(
+        var mailResult = await httpsPost(
           'api.resend.com',
           '/emails',
           {
@@ -145,12 +146,13 @@ module.exports = async function handler(req, res) {
           },
           { 'Authorization': 'Bearer ' + resendKey }
         );
+        emailStatus = 'HTTP ' + mailResult.status + ': ' + mailResult.text.substring(0, 150);
       } catch (mailErr) {
-        console.log('E-Mail Fehler:', mailErr.message);
+        emailStatus = 'Fehler: ' + mailErr.message;
       }
     }
 
-    return res.status(200).json({ results: results, debug_fetched: seiteninhalt.length });
+    return res.status(200).json({ results: results, debug_fetched: seiteninhalt.length, email_status: emailStatus });
 
   } catch (err) {
     console.error('Fehler:', err.message);
