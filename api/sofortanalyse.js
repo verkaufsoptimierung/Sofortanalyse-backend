@@ -55,7 +55,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
     var keyCheck = process.env.GROQ_API_KEY ? 'gesetzt (' + process.env.GROQ_API_KEY.length + ' Zeichen)' : 'FEHLT!';
     var resendCheck = process.env.RESEND_API_KEY ? 'gesetzt (' + process.env.RESEND_API_KEY.length + ' Zeichen)' : 'FEHLT!';
-    return res.status(200).json({ status: 'Funktion läuft', version: '16.0-email-debug', groq_key: keyCheck, resend_key: resendCheck });
+    return res.status(200).json({ status: 'Funktion läuft', version: '18.0-fullpage', groq_key: keyCheck, resend_key: resendCheck });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nur POST erlaubt' });
@@ -71,24 +71,43 @@ module.exports = async function handler(req, res) {
   var fetchUrl = url;
   if (!fetchUrl.startsWith('http')) fetchUrl = 'https://' + fetchUrl;
 
-  // Schritt 1: Website abrufen
+  // Schritt 1: Website abrufen – komplette Startseite
   var seiteninhalt = '';
   try {
     var html = await httpsGet(fetchUrl);
+    // Unwichtiges entfernen
     html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
     html = html.replace(/<style[\s\S]*?<\/style>/gi, '');
-    html = html.replace(/<[^>]+>/g, ' ');
-    html = html.replace(/\s+/g, ' ').trim();
-    seiteninhalt = html.substring(0, 3000);
+    html = html.replace(/<svg[\s\S]*?<\/svg>/gi, '');
+    html = html.replace(/<!--[\s\S]*?-->/g, '');
+    html = html.replace(/<noscript[\s\S]*?<\/noscript>/gi, '');
+
+    // Wichtige Elemente mit Kontext extrahieren
+    var wichtig = '';
+    var tags = ['h1','h2','h3','h4','p','li','a','button','span','div','section','header','footer','nav'];
+    tags.forEach(function(tag) {
+      var regex = new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)<\\/' + tag + '>', 'gi');
+      var match;
+      while ((match = regex.exec(html)) !== null) {
+        var text = match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (text.length > 5) wichtig += text + '\n';
+      }
+    });
+
+    // Duplikate entfernen und bereinigen
+    var zeilen = wichtig.split('\n').filter(function(z, i, arr) {
+      return z.length > 3 && arr.indexOf(z) === i;
+    });
+    seiteninhalt = zeilen.join('\n').substring(0, 12000);
   } catch (e) {
     console.log('Website-Abruf fehlgeschlagen:', e.message);
   }
 
-  var systemMsg = 'Du bist Verkaufspsychologe nach der Farkas-Methode. Deine Aufgabe: Finde konkrete VERBESSERUNGSVORSCHLÄGE für Websites. Beschreibe NICHT was auf der Seite steht. Nenne NUR was fehlt oder verbessert werden sollte. Antworte ausschließlich mit einer nummerierten Liste, genau dieses Format:\n1. Verbesserungsvorschlag\n2. Verbesserungsvorschlag\n3. Verbesserungsvorschlag\n4. Verbesserungsvorschlag\n5. Verbesserungsvorschlag\n6. Verbesserungsvorschlag\n7. Verbesserungsvorschlag';
+  var systemMsg = 'Du bist Verkaufspsychologe nach der Farkas-Methode. Analysiere den Seiteninhalt und finde Optimierungspotentiale.\n\nWICHTIG:\n- Erfinde NICHTS. Erwähne nur Dinge die Du im Text tatsächlich siehst oder die EINDEUTIG fehlen\n- Wenn etwas vorhanden ist (z.B. Telefonnummer, E-Mail, Testimonials), nenne es NICHT als fehlend\n- Jeder Punkt: maximal 8 Wörter, prägnant, direkt\n- Fokus auf: schwaches Wertversprechen, fehlender Social Proof, unklare CTAs, fehlende Dringlichkeit, schwache Headlines, fehlende Garantien, unklare Zielgruppenansprache\n- Antworte NUR mit nummerierter Liste, kein anderer Text';
 
   var userMsg = seiteninhalt.length > 100
-    ? 'Hier ist der Inhalt der Website ' + url + ':\n\n' + seiteninhalt + '\n\nWas fehlt verkaufspsychologisch? Was sollte verbessert werden? Nenne 7 konkrete Optimierungspotentiale (max. 12 Wörter pro Punkt). Nur die nummerierte Liste, kein anderer Text.'
-    : 'Analysiere ' + url + ' und nenne 7 konkrete verkaufspsychologische Verbesserungspotentiale (max. 12 Wörter pro Punkt). Nur die nummerierte Liste.';
+    ? 'Seiteninhalt von ' + url + ':\n\n' + seiteninhalt + '\n\nNenne 7 konkrete Optimierungspotentiale. Nur was Du im Text siehst oder eindeutig vermisst. Max. 8 Wörter pro Punkt.'
+    : 'Analysiere ' + url + '. Nenne 7 Optimierungspotentiale, max. 8 Wörter pro Punkt.';
 
   // Schritt 2: Groq aufrufen
   try {
