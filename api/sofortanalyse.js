@@ -54,7 +54,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET') {
     var keyCheck = process.env.GROQ_API_KEY ? 'gesetzt (' + process.env.GROQ_API_KEY.length + ' Zeichen)' : 'FEHLT!';
-    return res.status(200).json({ status: 'Funktion läuft', version: '11.0-groq', groq_key: keyCheck });
+    return res.status(200).json({ status: 'Funktion läuft', version: '12.0-llama-3.3', groq_key: keyCheck });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nur POST erlaubt' });
@@ -95,7 +95,7 @@ module.exports = async function handler(req, res) {
       'api.groq.com',
       '/openai/v1/chat/completions',
       {
-        model: 'llama-3.1-70b-versatile',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: systemMsg },
           { role: 'user', content: userMsg }
