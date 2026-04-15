@@ -54,7 +54,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET') {
     var keyCheck = process.env.GROQ_API_KEY ? 'gesetzt (' + process.env.GROQ_API_KEY.length + ' Zeichen)' : 'FEHLT!';
-    return res.status(200).json({ status: 'Funktion läuft', version: '12.0-llama-3.3', groq_key: keyCheck });
+    return res.status(200).json({ status: 'Funktion läuft', version: '13.0-fix-prompt', groq_key: keyCheck });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nur POST erlaubt' });
@@ -83,11 +83,11 @@ module.exports = async function handler(req, res) {
     console.log('Website-Abruf fehlgeschlagen:', e.message);
   }
 
-  var systemMsg = 'Du bist Verkaufspsychologe und Conversion-Optimierer nach der Farkas-Methode. Du analysierst Websites und findest konkrete verkaufspsychologische Optimierungspotentiale. Antworte IMMER nur mit einem JSON-Array von 7 Strings auf Deutsch. Kein anderer Text, nur das JSON-Array.';
+  var systemMsg = 'Du bist Verkaufspsychologe nach der Farkas-Methode. Deine Aufgabe: Finde konkrete VERBESSERUNGSVORSCHLÄGE für Websites. Beschreibe NICHT was auf der Seite steht. Nenne NUR was fehlt oder verbessert werden sollte. Antworte ausschließlich mit einer nummerierten Liste, genau dieses Format:\n1. Verbesserungsvorschlag\n2. Verbesserungsvorschlag\n3. Verbesserungsvorschlag\n4. Verbesserungsvorschlag\n5. Verbesserungsvorschlag\n6. Verbesserungsvorschlag\n7. Verbesserungsvorschlag';
 
   var userMsg = seiteninhalt.length > 100
-    ? 'Analysiere diesen Seiteninhalt von ' + url + ' und liefere 7 konkrete, kurze Optimierungspunkte (max. 15 Wörter pro Punkt).\n\nSeiteninhalt:\n' + seiteninhalt + '\n\nFormat: ["Punkt 1","Punkt 2","Punkt 3","Punkt 4","Punkt 5","Punkt 6","Punkt 7"]'
-    : 'Analysiere die Website ' + url + ' und liefere 7 kurze Optimierungspunkte (max. 15 Wörter pro Punkt).\n\nFormat: ["Punkt 1","Punkt 2","Punkt 3","Punkt 4","Punkt 5","Punkt 6","Punkt 7"]';
+    ? 'Hier ist der Inhalt der Website ' + url + ':\n\n' + seiteninhalt + '\n\nWas fehlt verkaufspsychologisch? Was sollte verbessert werden? Nenne 7 konkrete Optimierungspotentiale (max. 12 Wörter pro Punkt). Nur die nummerierte Liste, kein anderer Text.'
+    : 'Analysiere ' + url + ' und nenne 7 konkrete verkaufspsychologische Verbesserungspotentiale (max. 12 Wörter pro Punkt). Nur die nummerierte Liste.';
 
   // Schritt 2: Groq aufrufen
   try {
@@ -114,19 +114,12 @@ module.exports = async function handler(req, res) {
     var data = JSON.parse(result.text);
     var content = data.choices[0].message.content.trim();
 
-    var results;
-    try {
-      var cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-      var jsonMatch = cleaned.match(/\[[\s\S]*\]/);
-      results = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(cleaned);
-    } catch (e) {
-      results = content.split('\n')
-        .map(function(l) { return l.replace(/^[\s\-•*"\d.]+/, '').replace(/[",]+$/, '').trim(); })
-        .filter(function(l) { return l.length > 10; });
-    }
+    // Nummerierte Liste parsen: "1. Text" → ["Text", ...]
+    var results = content.split('\n')
+      .map(function(l) { return l.replace(/^\d+[\.\)]\s*/, '').replace(/^[-•*]\s*/, '').trim(); })
+      .filter(function(l) { return l.length > 8; });
 
-    if (!Array.isArray(results)) results = [String(results)];
-    results = results.filter(function(r) { return r && String(r).trim().length > 5; });
+    if (results.length === 0) results = [content.trim()];
 
     return res.status(200).json({ results: results, debug_fetched: seiteninhalt.length });
 
