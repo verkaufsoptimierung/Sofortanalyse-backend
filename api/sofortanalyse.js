@@ -54,7 +54,8 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET') {
     var keyCheck = process.env.GROQ_API_KEY ? 'gesetzt (' + process.env.GROQ_API_KEY.length + ' Zeichen)' : 'FEHLT!';
-    return res.status(200).json({ status: 'Funktion läuft', version: '14.0-email', groq_key: keyCheck });
+    var resendCheck = process.env.RESEND_API_KEY ? 'gesetzt (' + process.env.RESEND_API_KEY.length + ' Zeichen)' : 'FEHLT!';
+    return res.status(200).json({ status: 'Funktion läuft', version: '15.0-check-resend', groq_key: keyCheck, resend_key: resendCheck });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nur POST erlaubt' });
