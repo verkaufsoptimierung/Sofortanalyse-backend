@@ -54,7 +54,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'GET') {
     var keyCheck = process.env.GROQ_API_KEY ? 'gesetzt (' + process.env.GROQ_API_KEY.length + ' Zeichen)' : 'FEHLT!';
-    return res.status(200).json({ status: 'Funktion läuft', version: '13.0-fix-prompt', groq_key: keyCheck });
+    return res.status(200).json({ status: 'Funktion läuft', version: '14.0-email', groq_key: keyCheck });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nur POST erlaubt' });
@@ -120,6 +120,34 @@ module.exports = async function handler(req, res) {
       .filter(function(l) { return l.length > 8; });
 
     if (results.length === 0) results = [content.trim()];
+
+    // E-Mail-Benachrichtigung via Resend
+    var resendKey = process.env.RESEND_API_KEY;
+    if (resendKey) {
+      try {
+        var emailHtml = '<h2>Neuer Lead – Sofortanalyse</h2>' +
+          '<p><strong>Name:</strong> ' + (body.name || '–') + '</p>' +
+          '<p><strong>E-Mail:</strong> ' + (body.email || '–') + '</p>' +
+          '<p><strong>Website:</strong> ' + url + '</p>' +
+          '<h3>Analyseergebnisse:</h3><ul>' +
+          results.map(function(r) { return '<li>' + r + '</li>'; }).join('') +
+          '</ul>';
+
+        await httpsPost(
+          'api.resend.com',
+          '/emails',
+          {
+            from: 'Sofortanalyse <onboarding@resend.dev>',
+            to: ['verkaufsoptimierung@gmail.com'],
+            subject: 'Neuer Lead: ' + (body.name || 'Unbekannt') + ' – ' + url,
+            html: emailHtml
+          },
+          { 'Authorization': 'Bearer ' + resendKey }
+        );
+      } catch (mailErr) {
+        console.log('E-Mail Fehler:', mailErr.message);
+      }
+    }
 
     return res.status(200).json({ results: results, debug_fetched: seiteninhalt.length });
 
